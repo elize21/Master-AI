@@ -1,6 +1,6 @@
 const sessionName = "dreaded1";
 const donet = "https://github.com/Fortunatusmokaya/DREADED-AI";
-const owner = ["254114018035"]; // This will send a notification once the bot reconnects
+const owner = ["254701118127"]; // This will send a notification once the bot reconnects
 const {
   default: dreadedConnect,
   useMultiFileAuthState,
@@ -281,7 +281,7 @@ async function startHisoka() {
       console.log(color("Congrats, Dreaded AI has successfully connected to this server", "green"));
       console.log(color("Follow me on GitHub as Fortunatusmokaya", "red"));
       console.log(color("Text the bot number with !menu to check my command list"));
-      client.sendMessage(owner + "@s.whatsapp.net", { text: `Bot started!\n\nDreaded OpenAi :)\n${donet}` });
+      client.sendMessage(owner + "@s.whatsapp.net", { text: `Bot started!\n\nMASTER OpenAi :)\n${donet}` });
     }
     // console.log('Connected...', update)
   });
