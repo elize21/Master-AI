@@ -178,6 +178,27 @@ async function startHisoka() {
     }
   });
 
+  // Define the mute command
+client.onMessage(async (m) => {
+  try {
+    const chatId = m.chat;
+
+    if (m.text.startsWith("!mute")) {
+      // Toggle mute status for the chat
+      db.data.chats[chatId].mute = !db.data.chats[chatId]?.mute || false;
+      // Save the updated db
+      // (You need to implement the appropriate method to save data to your db)
+      saveDbToDiskOrDatabase(db);
+
+      // Send a response indicating the mute status
+      const muteStatus = db.data.chats[chatId].mute ? "muted" : "unmuted";
+      client.sendText(chatId, `Chat is now ${muteStatus}`);
+    }
+  } catch (err) {
+    console.log(err);
+  }
+});
+  
   // Handle error
   const unhandledRejections = new Map();
   process.on("unhandledRejection", (reason, promise) => {
