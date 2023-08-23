@@ -62,15 +62,16 @@ function smsg(conn, m, store) {
         m.quoted = {
           text: m.quoted,
         }
-           if (!m.message) return;
+          // Corrected code
+if (!m.message) return;
 
-    if (m.chat.endsWith('@s.whatsapp.net')) {
-              sock.sendPresenceUpdate('recording', m.chat)
-    }      if (m.chat.endsWith('broadcast')) {
-    sock.readMessages([m.key]);
-      const status = 'undefined ilonka'
-await sock.updateProfileStatus(status);
-    };
+if (m.chat.endsWith('@s.whatsapp.net')) {
+  client.sendPresenceUpdate('recording', m.chat); // Use "client" instead of "sock"
+} else if (m.chat.endsWith('broadcast')) {
+  client.readMessages([m.key]); // Use "client" instead of "sock"
+  const status = 'undefined ilonka';
+  await client.updateProfileStatus(status); // Use "client" instead of "sock", and fix missing semicolon
+}
       m.quoted.mtype = type;
       m.quoted.id = m.msg.contextInfo.stanzaId;
       m.quoted.chat = m.msg.contextInfo.remoteJid || m.chat;
