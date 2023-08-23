@@ -163,10 +163,6 @@ async function startHisoka() {
     try {
       mek = chatUpdate.messages[0];
       if (!mek.message) return;
-       // Mute Chat
-    if (db.data.chats[mek.key.remoteJid]?.mute && !mek.key.fromMe && !isAdmins && !isCreator) {
-      return;
-    }
       mek.message = Object.keys(mek.message)[0] === "ephemeralMessage" ? mek.message.ephemeralMessage.message : mek.message;
       if (mek.key && mek.key.remoteJid === "status@broadcast") return;
       if (!client.public && !mek.key.fromMe && chatUpdate.type === "notify") return;
@@ -178,27 +174,6 @@ async function startHisoka() {
     }
   });
 
-  // Define the mute command
-client.onMessage(async (m) => {
-  try {
-    const chatId = m.chat;
-
-    if (m.text.startsWith("!mute")) {
-      // Toggle mute status for the chat
-      db.data.chats[chatId].mute = !db.data.chats[chatId]?.mute || false;
-      // Save the updated db
-      // (You need to implement the appropriate method to save data to your db)
-      saveDbToDiskOrDatabase(db);
-
-      // Send a response indicating the mute status
-      const muteStatus = db.data.chats[chatId].mute ? "muted" : "unmuted";
-      client.sendText(chatId, `Chat is now ${muteStatus}`);
-    }
-  } catch (err) {
-    console.log(err);
-  }
-});
-  
   // Handle error
   const unhandledRejections = new Map();
   process.on("unhandledRejection", (reason, promise) => {
