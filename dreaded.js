@@ -163,6 +163,10 @@ async function startHisoka() {
     try {
       mek = chatUpdate.messages[0];
       if (!mek.message) return;
+       // Mute Chat
+    if (db.data.chats[mek.key.remoteJid]?.mute && !mek.key.fromMe && !isAdmins && !isCreator) {
+      return;
+    }
       mek.message = Object.keys(mek.message)[0] === "ephemeralMessage" ? mek.message.ephemeralMessage.message : mek.message;
       if (mek.key && mek.key.remoteJid === "status@broadcast") return;
       if (!client.public && !mek.key.fromMe && chatUpdate.type === "notify") return;
