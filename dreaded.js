@@ -1,358 +1,166 @@
-const sessionName = "dreaded1";
-const donet = "https://github.com/Fortunatusmokaya/DREADED-AI";
-const owner = ["254701118127"]; // This will send a notification once the bot reconnects
-const {
-  default: dreadedConnect,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion,
-  makeInMemoryStore,
-  jidDecode,
-  proto,
-  getContentType,
-} = require("@adiwajshing/baileys");
-const pino = require("pino");
-const { Boom } = require("@hapi/boom");
+const { BufferJSON, WA_DEFAULT_EPHEMERAL, generateWAMessageFromContent, proto, generateWAMessageContent, generateWAMessage, prepareWAMessageMedia, areJidsSameUser, getContentType } = require("@adiwajshing/baileys");
 const fs = require("fs");
-const axios = require("axios");
+const util = require("util");
 const chalk = require("chalk");
-const figlet = require("figlet");
-const _ = require("lodash");
-const PhoneNumber = require("awesome-phonenumber");
+const { Configuration, OpenAIApi } = require("openai");
+let setting = require("./Required.json");
 
-const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store" }) });
+module.exports = dreaded = async (client, m, chatUpdate, store) => {
+  try {
+    var body =
+      m.mtype === "conversation"
+        ? m.message.conversation
+        : m.mtype == "imageMessage"
+        ? m.message.imageMessage.caption
+        : m.mtype == "videoMessage"
+        ? m.message.videoMessage.caption
+        : m.mtype == "extendedTextMessage"
+        ? m.message.extendedTextMessage.text
+        : m.mtype == "buttonsResponseMessage"
+        ? m.message.buttonsResponseMessage.selectedButtonId
+        : m.mtype == "listResponseMessage"
+        ? m.message.listResponseMessage.singleSelectReply.selectedRowId
+        : m.mtype == "templateButtonReplyMessage"
+        ? m.message.templateButtonReplyMessage.selectedId
+        : m.mtype === "messageContextInfo"
+        ? m.message.buttonsResponseMessage?.selectedButtonId || m.message.listResponseMessage?.singleSelectReply.selectedRowId || m.text
+        : "";
+    var budy = typeof m.text == "string" ? m.text : "";
+    // var prefix = /^[\\/!#.]/gi.test(body) ? body.match(/^[\\/!#.]/gi) : "/"
+    var prefix = /^[\\/!#.]/gi.test(body) ? body.match(/^[\\/!#.]/gi) : "/";
+    const isCmd2 = body.startsWith(prefix);
+    const command = body.replace(prefix, "").trim().split(/ +/).shift().toLowerCase();
+    const args = body.trim().split(/ +/).slice(1);
+    const pushname = m.pushName || "No Name";
+    const botNumber = await client.decodeJid(client.user.id);
+    const itsMe = m.sender == botNumber ? true : false;
+    let text = (q = args.join(" "));
+    const arg = budy.trim().substring(budy.indexOf(" ") + 1);
+    const arg1 = arg.trim().substring(arg.indexOf(" ") + 1);
 
-const color = (text, color) => {
-  return !color ? chalk.green(text) : chalk.keyword(color)(text);
-};
+    const from = m.chat;
+    const reply = m.reply;
+    const sender = m.sender;
+    const mek = chatUpdate.messages[0];
 
-function smsg(conn, m, store) {
-  if (!m) return m;
-  let M = proto.WebMessageInfo;
-  if (m.key) {
-    m.id = m.key.id;
-    m.isBaileys = m.id.startsWith("BAE5") && m.id.length === 16;
-    m.chat = m.key.remoteJid;
-    m.fromMe = m.key.fromMe;
-    m.isGroup = m.chat.endsWith("@g.us");
-    m.sender = conn.decodeJid((m.fromMe && conn.user.id) || m.participant || m.key.participant || m.chat || "");
-    if (m.isGroup) m.participant = conn.decodeJid(m.key.participant) || "";
-  }
-  if (m.message) {
-    m.mtype = getContentType(m.message);
-    m.msg = m.mtype == "viewOnceMessage" ? m.message[m.mtype].message[getContentType(m.message[m.mtype].message)] : m.message[m.mtype];
-    m.body =
-      m.message.conversation ||
-      m.msg.caption ||
-      m.msg.text ||
-      (m.mtype == "listResponseMessage" && m.msg.singleSelectReply.selectedRowId) ||
-      (m.mtype == "buttonsResponseMessage" && m.msg.selectedButtonId) ||
-      (m.mtype == "viewOnceMessage" && m.msg.caption) ||
-      m.text;
-    let quoted = (m.quoted = m.msg.contextInfo ? m.msg.contextInfo.quotedMessage : null);
-    m.mentionedJid = m.msg.contextInfo ? m.msg.contextInfo.mentionedJid : [];
-    if (m.quoted) {
-      let type = getContentType(quoted);
-      m.quoted = m.quoted[type];
-      if (["productMessage"].includes(type)) {
-        type = getContentType(m.quoted);
-        m.quoted = m.quoted[type];
-      }
-      if (typeof m.quoted === "string")
-        m.quoted = {
-          text: m.quoted,
-        };
-      m.quoted.mtype = type;
-      m.quoted.id = m.msg.contextInfo.stanzaId;
-      m.quoted.chat = m.msg.contextInfo.remoteJid || m.chat;
-      m.quoted.isBaileys = m.quoted.id ? m.quoted.id.startsWith("BAE5") && m.quoted.id.length === 16 : false;
-      m.quoted.sender = conn.decodeJid(m.msg.contextInfo.participant);
-      m.quoted.fromMe = m.quoted.sender === conn.decodeJid(conn.user.id);
-      m.quoted.text = m.quoted.text || m.quoted.caption || m.quoted.conversation || m.quoted.contentText || m.quoted.selectedDisplayText || m.quoted.title || "";
-      m.quoted.mentionedJid = m.msg.contextInfo ? m.msg.contextInfo.mentionedJid : [];
-      m.getQuotedObj = m.getQuotedMessage = async () => {
-        if (!m.quoted.id) return false;
-        let q = await store.loadMessage(m.chat, m.quoted.id, conn);
-        return exports.smsg(conn, q, store);
-      };
-      let vM = (m.quoted.fakeObj = M.fromObject({
-        key: {
-          remoteJid: m.quoted.chat,
-          fromMe: m.quoted.fromMe,
-          id: m.quoted.id,
-        },
-        message: quoted,
-        ...(m.isGroup ? { participant: m.quoted.sender } : {}),
-      }));
+    const color = (text, color) => {
+      return !color ? chalk.green(text) : chalk.keyword(color)(text);
+    };
 
-      /**
-       *
-       * @returns
-       */
-      m.quoted.delete = () => conn.sendMessage(m.quoted.chat, { delete: vM.key });
+    // Group
+    const groupMetadata = m.isGroup ? await client.groupMetadata(m.chat).catch((e) => {}) : "";
+    const groupName = m.isGroup ? groupMetadata.subject : "";
 
-      /**
-       *
-       * @param {*} jid
-       * @param {*} forceForward
-       * @param {*} options
-       * @returns
-       */
-      m.quoted.copyNForward = (jid, forceForward = false, options = {}) => conn.copyNForward(jid, vM, forceForward, options);
+    // Push Message To Console
+    let argsLog = budy.length > 30 ? `${q.substring(0, 30)}...` : budy;
 
-      /**
-       *
-       * @returns
-       */
-      m.quoted.download = () => conn.downloadMediaMessage(m.quoted);
+    if (isCmd2 && !m.isGroup) {
+      console.log(chalk.black(chalk.bgWhite("[ DREADED-AI ]")), color(argsLog, "turquoise"), chalk.magenta("From"), chalk.green(pushname), chalk.yellow(`[ ${m.sender.replace("@s.whatsapp.net", "")} ]`));
+    } else if (isCmd2 && m.isGroup) {
+      console.log(
+        chalk.black(chalk.bgWhite("[ LOGS ]")),
+        color(argsLog, "turquoise"),
+        chalk.magenta("From"),
+        chalk.green(pushname),
+        chalk.yellow(`[ ${m.sender.replace("@s.whatsapp.net", "")} ]`),
+        chalk.blueBright("IN"),
+        chalk.green(groupName)
+      );
     }
-  }
-  if (m.msg.url) m.download = () => conn.downloadMediaMessage(m.msg);
-  m.text = m.msg.text || m.msg.caption || m.message.conversation || m.msg.contentText || m.msg.selectedDisplayText || m.msg.title || "";
-  /**
-   * Reply to this message
-   * @param {String|Object} text
-   * @param {String|false} chatId
-   * @param {Object} options
-   */
-  m.reply = (text, chatId = m.chat, options = {}) => (Buffer.isBuffer(text) ? conn.sendMedia(chatId, text, "file", "", m, { ...options }) : conn.sendText(chatId, text, m, { ...options }));
-  /**
-   * Copy this message
-   */
-  m.copy = () => exports.smsg(conn, M.fromObject(M.toObject(m)));
 
-  /**
-   *
-   * @param {*} jid
-   * @param {*} forceForward
-   * @param {*} options
-   * @returns
-   */
-  m.copyNForward = (jid = m.chat, forceForward = false, options = {}) => conn.copyNForward(jid, m, forceForward, options);
+    if (isCmd2) {
+      switch (command) {
+        case "help":
+        case "menu":
 
-  return m;
-}
+          m.reply(`DREADED CHATBOT AI
+            
+CHATGPT CHATBOT
+Cmd: ${prefix}g
+This is for machine based AI responses in form of text. 
 
-async function startHisoka() {
-  const { state, saveCreds } = await useMultiFileAuthState(`./${sessionName ? sessionName : "session"}`);
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
-  console.log(
-    color(
-      figlet.textSync("DREADED-AI", {
-        font: "Standard",
-        horizontalLayout: "default",
-        vertivalLayout: "default",
-        whitespaceBreak: false,
-      }),
-      "green"
-    )
-  );
+AI-GENERATED IMAGE
+Cmd: ${prefix}img
+This will produce ai-based image according to your query
 
-  const client = dreadedConnect({
-    logger: pino({ level: "silent" }),
-    printQRInTerminal: true,
-    browser: ["CHATGPT - DREADED", "Safari", "5.1.7"],
-    auth: state,
-  });
+You may also want to build a bot of this kind, Don't hesitate to text wa.me/254114018035 for guidance!`)
+          break;
+        case "g": case "openai": 
+          try {
+            if (setting.keyopenai === "ISI_APIKEY_OPENAI_DISINI") return reply("I need an openAi API key");
+            if (!text) return reply(`This is Dreaded AI chatbot using Chatgpt API to create almost natural language response to your queries\n\nExample:\n${prefix}${command} Write for me a poem about money`);
+            const configuration = new Configuration({
+              apiKey: setting.keyopenai,
+            });
+            const openai = new OpenAIApi(configuration);
 
-  store.bind(client.ev);
-
-  client.ev.on("messages.upsert", async (chatUpdate) => {
-    //console.log(JSON.stringify(chatUpdate, undefined, 2))
-    try {
-      mek = chatUpdate.messages[0];
-      if (!mek.message) return;
-      mek.message = Object.keys(mek.message)[0] === "ephemeralMessage" ? mek.message.ephemeralMessage.message : mek.message;
-      if (mek.key && mek.key.remoteJid === "status@broadcast") return;
-      if (!client.public && !mek.key.fromMe && chatUpdate.type === "notify") return;
-      if (mek.key.id.startsWith("BAE5") && mek.key.id.length === 16) return;
-      m = smsg(client, mek, store);
-      require("./dreaded")(client, m, chatUpdate, store);
-    } catch (err) {
-      console.log(err);
-    }
-  });
-
-  // Handle error
-  const unhandledRejections = new Map();
-  process.on("unhandledRejection", (reason, promise) => {
-    unhandledRejections.set(promise, reason);
-    console.log("Unhandled Rejection at:", promise, "reason:", reason);
-  });
-  process.on("rejectionHandled", (promise) => {
-    unhandledRejections.delete(promise);
-  });
-  process.on("Something went wrong", function (err) {
-    console.log("Caught exception: ", err);
-  });
-
-  // Setting
-  client.decodeJid = (jid) => {
-    if (!jid) return jid;
-    if (/:\d+@/gi.test(jid)) {
-      let decode = jidDecode(jid) || {};
-      return (decode.user && decode.server && decode.user + "@" + decode.server) || jid;
-    } else return jid;
-  };
-
-  client.ev.on("contacts.update", (update) => {
-    for (let contact of update) {
-      let id = client.decodeJid(contact.id);
-      if (store && store.contacts) store.contacts[id] = { id, name: contact.notify };
-    }
-  });
-
-  client.getName = (jid, withoutContact = false) => {
-    id = client.decodeJid(jid);
-    withoutContact = client.withoutContact || withoutContact;
-    let v;
-    if (id.endsWith("@g.us"))
-      return new Promise(async (resolve) => {
-        v = store.contacts[id] || {};
-        if (!(v.name || v.subject)) v = client.groupMetadata(id) || {};
-        resolve(v.name || v.subject || PhoneNumber("+" + id.replace("@s.whatsapp.net", "")).getNumber("international"));
-      });
-    else
-      v =
-        id === "0@s.whatsapp.net"
-          ? {
-              id,
-              name: "WhatsApp",
+            const response = await openai.createCompletion({
+              model: "text-davinci-003",
+              prompt: text,
+              temperature: 0, // Higher values means the model will take more risks.
+              max_tokens: 2048, // The maximum number of tokens to generate in the completion. Most models have a context length of 2048 tokens (except for the newest models, which support 4096).
+              top_p: 1, // alternative to sampling with temperature, called nucleus sampling
+              frequency_penalty: 0.3, // Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
+              presence_penalty: 0 // Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
+          });
+            m.reply(`${response.data.choices[0].text}`);
+          } catch (error) {
+          if (error.response) {
+            console.log(error.response.status);
+            console.log(error.response.data);
+            console.log(`${error.response.status}\n\n${error.response.data}`);
+          } else {
+            console.log(error);
+            m.reply("An error has occurred  :"+ error.message);
+          }
+        }
+          break;
+        case "img": case "ai-img": case "image": case "images":
+          try {
+            if (setting.keyopenai === "ISI_APIKEY_OPENAI_DISINI") return reply("I need an openAi API key");
+            if (!text) return reply(`This will generate an AI-BASED IMAGE according to your query AI.\n\nExample:\n${prefix}${command} black mercedez car`);
+            const configuration = new Configuration({
+              apiKey: setting.keyopenai,
+            });
+            const openai = new OpenAIApi(configuration);
+            const response = await openai.createImage({
+              prompt: text,
+              n: 1,
+              size: "512x512",
+            });
+            //console.log(response.data.data[0].url)
+            client.sendImage(from, response.data.data[0].url, text, mek);
+            } catch (error) {
+          if (error.response) {
+            console.log(error.response.status);
+            console.log(error.response.data);
+            console.log(`${error.response.status}\n\n${error.response.data}`);
+          } else {
+            console.log(error);
+            m.reply("An error has occurred:"+ error.message);
+          }
+        }
+break;
+        default: {
+          if (isCmd2 && budy.toLowerCase() != undefined) {
+            if (m.chat.endsWith("broadcast")) return;
+            if (m.isBaileys) return;
+            if (!budy.toLowerCase()) return;
+            if (argsLog || (isCmd2 && !m.isGroup)) {
+              // client.sendReadReceipt(m.chat, m.sender, [m.key.id])
+              console.log(chalk.black(chalk.bgRed("[ ERROR ]")), color("command", "turquoise"), color(`${prefix}${command}`, "turquoise"), color("Dreaded", "turquoise"));
+            } else if (argsLog || (isCmd2 && m.isGroup)) {
+              // client.sendReadReceipt(m.chat, m.sender, [m.key.id])
+              console.log(chalk.black(chalk.bgRed("[ ERROR ]")), color("command", "turquoise"), color(`${prefix}${command}`, "turquoise"), color("Dreaded", "turquoise"));
             }
-          : id === client.decodeJid(client.user.id)
-          ? client.user
-          : store.contacts[id] || {};
-    return (withoutContact ? "" : v.name) || v.subject || v.verifiedName || PhoneNumber("+" + jid.replace("@s.whatsapp.net", "")).getNumber("international");
-  };
-
-  client.setStatus = (status) => {
-    client.query({
-      tag: "iq",
-      attrs: {
-        to: "@s.whatsapp.net",
-        type: "set",
-        xmlns: "status",
-      },
-      content: [
-        {
-          tag: "status",
-          attrs: {},
-          content: Buffer.from(status, "utf-8"),
-        },
-      ],
-    });
-    return status;
-  };
-
-  client.public = true;
-
-  client.serializeM = (m) => smsg(client, m, store);
-  client.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === "close") {
-      let reason = new Boom(lastDisconnect?.error)?.output.statusCode;
-      if (reason === DisconnectReason.badSession) {
-        console.log(`Bad Session File, Please Delete Session and Scan Again`);
-        process.exit();
-      } else if (reason === DisconnectReason.connectionClosed) {
-        console.log("Connection closed, reconnecting....");
-        startHisoka();
-      } else if (reason === DisconnectReason.connectionLost) {
-        console.log("Connection Lost from Server, reconnecting...");
-        startHisoka();
-      } else if (reason === DisconnectReason.connectionReplaced) {
-        console.log("Connection Replaced, Another New Session Opened, Please Restart Bot");
-        process.exit();
-      } else if (reason === DisconnectReason.loggedOut) {
-        console.log(`Device Logged Out, Please Delete File creds.json and Scan Again.`);
-        process.exit();
-      } else if (reason === DisconnectReason.restartRequired) {
-        console.log("Restart Required, Restarting...");
-        startHisoka();
-      } else if (reason === DisconnectReason.timedOut) {
-        console.log("Connection TimedOut, Reconnecting...");
-        startHisoka();
-      } else {
-        console.log(`Unknown DisconnectReason: ${reason}|${connection}`);
-        startHisoka();
+          }
+        }
       }
-    } else if (connection === "open") {
-      console.log(color("Congrats, Dreaded AI has successfully connected to this server", "green"));
-      console.log(color("Follow me on GitHub as Fortunatusmokaya", "red"));
-      console.log(color("Text the bot number with !menu to check my command list"));
-      client.sendMessage(owner + "@s.whatsapp.net", { text: `Bot started!\n\nDreaded OpenAi :)\n${donet}` });
     }
-    // console.log('Connected...', update)
-  });
-
-  client.ev.on("creds.update", saveCreds);
-
-  const getBuffer = async (url, options) => {
-    try {
-      options ? options : {};
-      const res = await axios({
-        method: "get",
-        url,
-        headers: {
-          DNT: 1,
-          "Upgrade-Insecure-Request": 1,
-        },
-        ...options,
-        responseType: "arraybuffer",
-      });
-      return res.data;
-    } catch (err) {
-      return err;
-    }
-  };
-
-  client.sendImage = async (jid, path, caption = "", quoted = "", options) => {
-    let buffer = Buffer.isBuffer(path)
-      ? path
-      : /^data:.*?\/.*?;base64,/i.test(path)
-      ? Buffer.from(path.split`,`[1], "base64")
-      : /^https?:\/\//.test(path)
-      ? await await getBuffer(path)
-      : fs.existsSync(path)
-      ? fs.readFileSync(path)
-      : Buffer.alloc(0);
-    return await client.sendMessage(jid, { image: buffer, caption: caption, ...options }, { quoted });
-  };
-
-  client.sendText = (jid, text, quoted = "", options) => client.sendMessage(jid, { text: text, ...options }, { quoted });
-
-  client.cMod = (jid, copy, text = "", sender = client.user.id, options = {}) => {
-    //let copy = message.toJSON()
-    let mtype = Object.keys(copy.message)[0];
-    let isEphemeral = mtype === "ephemeralMessage";
-    if (isEphemeral) {
-      mtype = Object.keys(copy.message.ephemeralMessage.message)[0];
-    }
-    let msg = isEphemeral ? copy.message.ephemeralMessage.message : copy.message;
-    let content = msg[mtype];
-    if (typeof content === "string") msg[mtype] = text || content;
-    else if (content.caption) content.caption = text || content.caption;
-    else if (content.text) content.text = text || content.text;
-    if (typeof content !== "string")
-      msg[mtype] = {
-        ...content,
-        ...options,
-      };
-    if (copy.key.participant) sender = copy.key.participant = sender || copy.key.participant;
-    else if (copy.key.participant) sender = copy.key.participant = sender || copy.key.participant;
-    if (copy.key.remoteJid.includes("@s.whatsapp.net")) sender = sender || copy.key.remoteJid;
-    else if (copy.key.remoteJid.includes("@broadcast")) sender = sender || copy.key.remoteJid;
-    copy.key.remoteJid = jid;
-    copy.key.fromMe = sender === client.user.id;
-
-    return proto.WebMessageInfo.fromObject(copy);
-  };
-
-  return client;
-}
-
-startHisoka();
+  } catch (err) {
+    m.reply(util.format(err));
+  }
+};
 
 let file = require.resolve(__filename);
 fs.watchFile(file, () => {
